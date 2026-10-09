@@ -1,0 +1,26 @@
+[package]
+name = "qpp-iot-boards"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "Per-board physical entropy sources (qpp_rng_iot::JitterSource) for QPP-IoT"
+
+[dependencies]
+qpp-rng-iot = { workspace = true }
+# Only the AVR source needs the Timer1 shim from entropy-timer.
+entropy-timer = { workspace = true, optional = true }
+
+[build-dependencies]
+cc = "1.2"
+
+[features]
+default = []
+# Arduino Uno/Nano/Mega 2560: AVR watchdog RC oscillator timed by Timer1.
+avr-wdt = ["dep:entropy-timer"]
+# makerdiary nRF52840 MDK (and other nRF52840 boards): on-chip RNG peripheral.
+nrf52840 = []
+# Host-only stand-in with NO physical entropy, for tests and examples.
+mock = []

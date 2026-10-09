@@ -1,0 +1,56 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/qpp-iot",
+    "crates/qpp-iot-boards",
+]
+# Bare-metal images with their own workspaces: built by scripts/, not by
+# `cargo test --workspace`.
+exclude = ["firmware"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/QPP-IoT-Lib/QPP-IoT"
+publish = false # flip once the pieces below are pinned to released revisions
+
+[workspace.dependencies]
+rand_core = { version = "0.10.1", default-features = false }
+
+# --- The two sibling repositories this library combines ---------------
+#
+# While developing, both are path dependencies on the sibling checkouts
+# in qpp-iot-lib/, so a change in either shows up here immediately.
+#
+# Before releasing, replace each `path` with a pinned git revision (the
+# same way ascon/Cargo.toml pins qpp-rng-reference), e.g.
+#
+#   qpp-rng-iot  = { git = "https://github.com/QPP-IoT-Lib/QPP-RNG-IoT.git", rev = "<sha>" }
+#   ascon-iot    = { git = "https://github.com/QPP-IoT-Lib/ASCON-IoT.git",   rev = "<sha>" }
+#
+# (conditioning, rng-core and entropy-timer come from the same
+# QPP-RNG-IoT repository and take the same rev.)
+
+# QPP-RNG-IoT
+qpp-rng-iot = { path = "../qpp-rng/crates/qpp-rng-iot" }
+conditioning = { path = "../qpp-rng/crates/conditioning" }
+rng-core = { path = "../qpp-rng/crates/rng-core" }
+entropy-timer = { path = "../qpp-rng/crates/entropy-timer" }
+
+# ASCON-IoT
+ascon-iot = { path = "../ascon/crates/ascon-iot" }
+
+# This workspace
+qpp-iot-boards = { path = "crates/qpp-iot-boards" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+
+# Same pin as the QPP-RNG-IoT workspace: entropy-timer's C timer shims
+# must not be over-optimized (see qpp-rng/Cargo.toml for the story).
+[profile.release.package.entropy-timer]
+opt-level = 0

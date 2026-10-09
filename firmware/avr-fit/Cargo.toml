@@ -1,0 +1,27 @@
+[package]
+name = "avr-fit"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Smallest useful image of the whole stack on AVR: the watchdog entropy
+# source -> QPP-RNG -> SHA-256 -> Ascon-AEAD128 key, nonce and one
+# encryption. Exists to prove the stack fits an ATmega328P (Arduino
+# Nano/Uno) and to keep proving it: scripts/build-avr.sh fails if it
+# stops fitting. Not a product firmware (no UART, no error handling).
+
+[dependencies]
+qpp-iot = { path = "../../crates/qpp-iot", features = ["avr-wdt"] }
+
+[profile.release]
+panic = "abort"
+opt-level = "s"
+lto = true
+codegen-units = 1
+
+# entropy-timer's Timer1 shim must not be over-optimized (see
+# qpp-rng/Cargo.toml).
+[profile.release.package.entropy-timer]
+opt-level = 0
+
+[workspace]

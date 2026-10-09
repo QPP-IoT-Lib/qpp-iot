@@ -1,0 +1,26 @@
+[package]
+name = "qpp-iot"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "QPP-RNG entropy + Ascon-AEAD128 for bare-metal IoT devices"
+
+[dependencies]
+rand_core = { workspace = true }
+rng-core = { workspace = true }
+qpp-rng-iot = { workspace = true }
+conditioning = { workspace = true }
+ascon-iot = { workspace = true }
+qpp-iot-boards = { workspace = true, optional = true }
+
+[dev-dependencies]
+qpp-iot-boards = { workspace = true, features = ["mock"] }
+
+[features]
+default = []
+# Per-board entropy sources, re-exported as `qpp_iot::boards`.
+avr-wdt = ["dep:qpp-iot-boards", "qpp-iot-boards/avr-wdt"]
+nrf52840 = ["dep:qpp-iot-boards", "qpp-iot-boards/nrf52840"]
