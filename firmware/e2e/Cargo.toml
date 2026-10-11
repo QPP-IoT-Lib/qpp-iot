@@ -1,0 +1,43 @@
+[package]
+name = "qpp-iot-e2e"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# End-to-end check of the whole stack on a real board: the board's
+# physical source -> QPP-RNG -> SHA-256 -> Ascon-AEAD128 key and nonce,
+# then encryption, decryption and a tampered-message rejection, with
+# cycle counts and the peak stack use reported over the UART.
+# scripts/e2e-check.py reads the report and checks every ciphertext
+# against the ascon-c reference.
+#
+#   AVR (Nano / Mega 2560): scripts/build-e2e.sh <atmega328p|atmega2560>
+#   nRF52840:               cargo build --release --target thumbv7em-none-eabihf
+
+[target.'cfg(target_arch = "avr")'.dependencies]
+qpp-iot = { path = "../../crates/qpp-iot", features = ["avr-wdt"] }
+# The cycle counter: Timer1, already started by the watchdog source.
+entropy-timer = { path = "../../../qpp-rng/crates/entropy-timer" }
+
+[target.'cfg(target_arch = "arm")'.dependencies]
+qpp-iot = { path = "../../crates/qpp-iot", features = ["nrf52840"] }
+cortex-m-rt = "0.7.5"
+
+[profile.release]
+panic = "abort"
+# "z", not "s": at "s" LLVM inlines Ascon's permutation into every
+# caller (setup, associated data, finalization, encrypt, decrypt), 3-5 KB
+# each on AVR; with decryption in the image that is 34.7 KB on an
+# ATmega328P, 1.9 KB more than it holds. At "z" the permutation stays one 3 KB function and
+# the image is about 21 KB.
+opt-level = "z"
+lto = true
+codegen-units = 1
+debug = true
+
+# entropy-timer's Timer1 shim must not be over-optimized (see
+# qpp-rng/Cargo.toml).
+[profile.release.package.entropy-timer]
+opt-level = 0
+
+[workspace]

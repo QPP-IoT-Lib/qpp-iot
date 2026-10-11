@@ -26,7 +26,10 @@ tested on the host; it is **not yet validated as a whole** (see
 | `crates/qpp-iot/` | the library you depend on: `QppEntropy` (source → QPP-RNG → SHA-256 → `rand_core::Rng`), `aead` (re-export of `ascon-iot`), `boards` (re-export of the board you enabled) |
 | `crates/qpp-iot-boards/` | one `JitterSource` per board, behind a feature: `avr-wdt` (Arduino Uno/Nano/Mega 2560), `nrf52840`, and a host-only `mock` with **no entropy** |
 | `firmware/avr-fit/` | smallest image of the whole stack on AVR; guards "fits an ATmega328P" |
-| `scripts/build-avr.sh` | builds it with the required flags and reports flash/RAM use |
+| `firmware/e2e/` | end-to-end check on a real board (Nano/Uno, Mega 2560, nRF52840): key, nonce, encrypt/decrypt/tamper, timings, peak stack |
+| `scripts/build-avr.sh` | builds `avr-fit` with the required flags and reports flash/RAM use |
+| `scripts/build-e2e.sh` | builds `firmware/e2e` for an AVR chip |
+| `scripts/e2e-check.py` | resets a board running `firmware/e2e` and checks its report against the ascon-c reference |
 
 Not here, on purpose: the hardware test firmware, measurement tools and
 results (`qpp-rng/hil-firmware`, `qpp-rng/hil-results`), the host test
@@ -82,6 +85,9 @@ the output.
 | Host: demo | `cargo run -p qpp-iot --example host_demo` |
 | nRF52840 | `cargo build -p qpp-iot --features nrf52840 --target thumbv7em-none-eabihf --release` |
 | AVR size check (Nano/Uno chip, Mega 2560 chip) | `scripts/build-avr.sh atmega328p`, `scripts/build-avr.sh atmega2560` |
+| End-to-end firmware, AVR | `scripts/build-e2e.sh atmega328p` (or `atmega2560`), then flash the ELF with avrdude |
+| End-to-end firmware, nRF52840 | `cd firmware/e2e && cargo build --release --target thumbv7em-none-eabihf` |
+| End-to-end check on the board | `uv run scripts/e2e-check.py --port <port> [--reset break for the nRF52840] --ascon-c <ascon_c_driver>` |
 
 A board feature on the wrong target is a compile error, so
 `--all-features` does not work on any single target.
@@ -101,31 +107,53 @@ compile-time `cfg`s of the RustCrypto crates, which a library cannot
 set: **every AVR application using this library must pass them** in its
 `RUSTFLAGS` (`scripts/build-avr.sh` shows how, alongside
 `-C target-cpu=<mcu>`, `-Z build-std=core` on nightly, and
-`AVR_MCU=<mcu>` for the C shims). Speed with the compact backends has
-not been measured.
+`AVR_MCU=<mcu>` for the C shims). With the compact backends, Ascon-AEAD128
+on the ATmega328P at 16 MHz takes 4.4 ms for an empty message with 16 B
+of associated data, then about 860 cycles per message byte (7.8 ms for
+64 B). Measured on the board with `firmware/e2e`, see
+`qpp-rng/hil-results/REPORT.md` §6.
+
+Two more things measured on the board:
+
+- **Use `opt-level = "z"` when the image also decrypts.** At `"s"`, LLVM
+  inlines Ascon's permutation into every caller, 3–5.5 KB each on AVR.
+  Key, nonce, encryption and decryption together come to 34.7 KB on an
+  ATmega328P, 1.9 KB more than it has. At `"z"` they come to 21.0 KB.
+- **Static RAM is `.data` + `.bss`, not just `.bss`.** On AVR, Rust's
+  constants (including SHA-256's 256-byte table) are copied to RAM at
+  startup. `avr-size`'s default output hides that inside `text`; use
+  `avr-size -A`. `avr-fit` uses 366 B of static RAM, and `firmware/e2e`
+  uses 662 B plus a peak stack of about 1 KB.
 
 ## Status and what is left
 
 What exists and has been checked: the whole stack builds for the host,
 the nRF52840 and both AVR chips; host tests cover the key/nonce →
 Ascon round trip, authentication failure, diagnostics, and a dead source
-being rejected; the AVR image links and fits.
+being rejected; the AVR image links and fits. On the Arduino Nano,
+the Arduino Mega 2560 and the nRF52840, `firmware/e2e` ran the whole stack from the board's
+physical source. Every reset gave a different key and nonce, every
+ciphertext and tag matched the ascon-c reference, and tampered messages
+were rejected (`qpp-rng/hil-results/REPORT.md` §6).
 
 Before this is "the final library", in rough order:
 
 **Validate**
 - [ ] Re-run `qpp-rng/hil-firmware/tools/smoke.sh <board>` on each board:
       the refactored `iot` firmware has not been run on hardware.
-- [ ] Finish the 1 MB output runs on the Arduinos and assess them with
-      NIST `ea_iid` / SP 800-22 (the nRF52840's passed).
+- [x] Finish the 1 MB output runs on the Arduinos and assess them with
+      NIST `ea_iid` / SP 800-22: both pass, like the nRF52840's.
 - [ ] Re-check the credited entropy per source (`avr-wdt`: 1 bit,
       `nrf52840`: 4 bits) against the final long-run data.
-- [ ] Run the final image on the boards, not just the host mock: end to
-      end key generation and encryption on the Mega, Nano and nRF52840.
-- [ ] Measure **stack/RAM** on the ATmega328P (2 KB total): SHA-256 and
-      Ascon were never run there; only static RAM (68 bytes) is known.
-- [ ] Measure speed and seed time on AVR with the compact backends
-      (at ~3.7 B/s of conditioned output, a 256-bit key takes about 9 s).
+- [x] Run the final image on the boards, not just the host mock: end to
+      end key generation and encryption on the Nano, Mega 2560 and
+      nRF52840 (`firmware/e2e`).
+- [x] Measure **stack/RAM** on the ATmega328P (2 KB total): 662 B static
+      (`firmware/e2e`; 366 B for `avr-fit`) + about 1 KB peak stack,
+      leaving 357 B untouched.
+- [x] Measure speed and seed time on AVR with the compact backends: a
+      128-bit key and its nonce take 8.7 s (source-limited); Ascon takes
+      4.4–7.8 ms for 0–64 B messages.
 
 **Complete the design**
 - [ ] **Nonce strategy.** `generate_random_nonce` does not guarantee
