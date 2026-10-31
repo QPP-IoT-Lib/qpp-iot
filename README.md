@@ -24,9 +24,9 @@ tested on the host; it is **not yet validated as a whole** (see
 | Path | What |
 |---|---|
 | `crates/qpp-iot/` | the library you depend on: `QppEntropy` (source → QPP-RNG → SHA-256 → `rand_core::Rng`), `aead` (re-export of `ascon-iot`), `boards` (re-export of the board you enabled) |
-| `crates/qpp-iot-boards/` | one `JitterSource` per board, behind a feature: `avr-wdt` (Arduino Uno/Nano/Mega 2560), `nrf52840`, and a host-only `mock` with **no entropy** |
+| `crates/qpp-iot-boards/` | one `JitterSource` per board, behind a feature: `avr-wdt` (Arduino Uno/Nano/Mega 2560), `nrf52840`, `esp32`, and a host-only `mock` with **no entropy** |
 | `firmware/avr-fit/` | smallest image of the whole stack on AVR; guards "fits an ATmega328P" |
-| `firmware/e2e/` | end-to-end check on a real board (Nano/Uno, Mega 2560, nRF52840): key, nonce, encrypt/decrypt/tamper, timings, peak stack |
+| `firmware/e2e/` | end-to-end check on a real board (Nano/Uno, Mega 2560, nRF52840, ESP32): key, nonce, encrypt/decrypt/tamper, timings, peak stack |
 | `scripts/build-avr.sh` | builds `avr-fit` with the required flags and reports flash/RAM use |
 | `scripts/build-e2e.sh` | builds `firmware/e2e` for an AVR chip |
 | `scripts/e2e-check.py` | resets a board running `firmware/e2e` and checks its report against the ascon-c reference |
@@ -87,7 +87,8 @@ the output.
 | AVR size check (Nano/Uno chip, Mega 2560 chip) | `scripts/build-avr.sh atmega328p`, `scripts/build-avr.sh atmega2560` |
 | End-to-end firmware, AVR | `scripts/build-e2e.sh atmega328p` (or `atmega2560`), then flash the ELF with avrdude |
 | End-to-end firmware, nRF52840 | `cd firmware/e2e && cargo build --release --target thumbv7em-none-eabihf` |
-| End-to-end check on the board | `uv run scripts/e2e-check.py --port <port> [--reset break for the nRF52840] --ascon-c <ascon_c_driver>` |
+| End-to-end firmware, ESP32 | `scripts/build-e2e.sh esp32` |
+| End-to-end check on the board | `uv run scripts/e2e-check.py --port <port> [--reset break for the nRF52840, --reset rts for the ESP32] --ascon-c <ascon_c_driver>` |
 
 A board feature on the wrong target is a compile error, so
 `--all-features` does not work on any single target.

@@ -15,7 +15,7 @@ every reset produced a different key and nonce.
 
 Reset: `dtr` (default) toggles DTR, which auto-resets an Arduino;
 `break` sends a serial break, which makes the nRF52840 MDK's DAPLink
-reset the target. Exit status 0 only if every check passed.
+reset the target; `rts` pulses RTS with DTR released, for ESP32 boards. Exit status 0 only if every check passed.
 """
 
 import argparse
@@ -33,6 +33,12 @@ def reset(ser, how):
         time.sleep(0.1)
         ser.reset_input_buffer()
         ser.dtr = True
+    elif how == "rts":
+        ser.dtr = False
+        ser.rts = True
+        time.sleep(0.1)
+        ser.reset_input_buffer()
+        ser.rts = False
     else:
         ser.send_break(0.25)
 
@@ -110,7 +116,7 @@ def check_run(lines, driver):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", required=True)
-    ap.add_argument("--reset", choices=["dtr", "break"], default="dtr")
+    ap.add_argument("--reset", choices=["dtr", "break", "rts"], default="dtr")
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--timeout", type=float, default=90.0, help="seconds per run")
     ap.add_argument("--ascon-c", required=True, nargs="+", help="ascon_c_driver command (may be several words)")

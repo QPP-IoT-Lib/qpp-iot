@@ -12,6 +12,8 @@ description = "Per-board physical entropy sources (qpp_rng_iot::JitterSource) fo
 qpp-rng-iot = { workspace = true }
 # Only the AVR source needs the Timer1 shim from entropy-timer.
 entropy-timer = { workspace = true, optional = true }
+# Only the ESP32 source: starting the RNG's ADC noise source takes the HAL.
+esp-hal = { version = "1.2.2", features = ["esp32", "unstable"], optional = true }
 
 [build-dependencies]
 cc = "1.2"
@@ -22,5 +24,7 @@ default = []
 avr-wdt = ["dep:entropy-timer"]
 # makerdiary nRF52840 MDK (and other nRF52840 boards): on-chip RNG peripheral.
 nrf52840 = []
+# ESP32: on-chip RNG with its SAR ADC noise source on.
+esp32 = ["dep:esp-hal"]
 # Host-only stand-in with NO physical entropy, for tests and examples.
 mock = []

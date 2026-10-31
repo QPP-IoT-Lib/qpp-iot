@@ -24,3 +24,4 @@ default = []
 # Per-board entropy sources, re-exported as `qpp_iot::boards`.
 avr-wdt = ["dep:qpp-iot-boards", "qpp-iot-boards/avr-wdt"]
 nrf52840 = ["dep:qpp-iot-boards", "qpp-iot-boards/nrf52840"]
+esp32 = ["dep:qpp-iot-boards", "qpp-iot-boards/esp32"]

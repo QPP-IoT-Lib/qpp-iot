@@ -47,5 +47,5 @@ pub mod aead {
 
 /// Per-board entropy sources; enable the feature for your board
 /// (`avr-wdt` or `nrf52840`).
-#[cfg(any(feature = "avr-wdt", feature = "nrf52840"))]
+#[cfg(any(feature = "avr-wdt", feature = "nrf52840", feature = "esp32"))]
 pub use qpp_iot_boards as boards;

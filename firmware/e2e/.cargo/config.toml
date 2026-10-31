@@ -1,2 +1,5 @@
+[target.xtensa-esp32-none-elf]
+rustflags = ["-C", "link-arg=-Tlinkall.x", "-C", "link-arg=-nostartfiles"]
+
 [target.thumbv7em-none-eabihf]
 rustflags = ["-C", "link-arg=-Tlink.x"]

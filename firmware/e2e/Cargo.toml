@@ -13,6 +13,7 @@ publish = false
 #
 #   AVR (Nano / Mega 2560): scripts/build-e2e.sh <atmega328p|atmega2560>
 #   nRF52840:               cargo build --release --target thumbv7em-none-eabihf
+#   ESP32:                  scripts/build-e2e.sh esp32
 
 [target.'cfg(target_arch = "avr")'.dependencies]
 qpp-iot = { path = "../../crates/qpp-iot", features = ["avr-wdt"] }
@@ -22,6 +23,13 @@ entropy-timer = { path = "../../../qpp-rng/crates/entropy-timer" }
 [target.'cfg(target_arch = "arm")'.dependencies]
 qpp-iot = { path = "../../crates/qpp-iot", features = ["nrf52840"] }
 cortex-m-rt = "0.7.5"
+
+[target.'cfg(target_arch = "xtensa")'.dependencies]
+qpp-iot = { path = "../../crates/qpp-iot", features = ["esp32"] }
+esp-hal = { version = "1.2.2", features = ["esp32", "unstable"] }
+esp-bootloader-esp-idf = { version = "0.6.0", features = ["esp32"] }
+# The cycle counter: CCOUNT.
+entropy-timer = { path = "../../../qpp-rng/crates/entropy-timer" }
 
 [profile.release]
 panic = "abort"

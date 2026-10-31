@@ -45,9 +45,9 @@ mod board {
     pub const CREDIT: u8 = 1;
     /// One past RAMEND.
     #[cfg(mcu_atmega2560)]
-    pub const RAM_TOP: usize = 0x2200;
+    const RAM_TOP: usize = 0x2200;
     #[cfg(not(mcu_atmega2560))]
-    pub const RAM_TOP: usize = 0x0900;
+    const RAM_TOP: usize = 0x0900;
 
     // USART0: same data-space addresses on the ATmega328P and ATmega2560.
     const UCSR0A: *mut u8 = 0xC0 as *mut u8;
@@ -94,6 +94,10 @@ mod board {
         unsafe { read_volatile(SPL) as usize | (read_volatile(SPH) as usize) << 8 }
     }
 
+    pub fn ram_top() -> usize {
+        RAM_TOP
+    }
+
     /// First byte after `.data`, `.bss` and `.noinit` (avr-libc linker script).
     pub fn statics_end() -> usize {
         unsafe extern "C" {
@@ -122,7 +126,7 @@ mod board {
     pub const CPU_HZ: u32 = 64_000_000;
     /// Credited min-entropy per RNG byte (`qpp-iot-boards` docs).
     pub const CREDIT: u8 = 4;
-    pub const RAM_TOP: usize = 0x2004_0000;
+    const RAM_TOP: usize = 0x2004_0000;
 
     const TX_PIN: u32 = 20; // wired to the DAPLink USB-serial bridge
     const P0_OUTSET: *mut u32 = 0x5000_0508 as *mut u32;
@@ -194,6 +198,10 @@ mod board {
         sp
     }
 
+    pub fn ram_top() -> usize {
+        RAM_TOP
+    }
+
     pub fn statics_end() -> usize {
         cortex_m_rt::heap_start() as usize
     }
@@ -206,6 +214,95 @@ mod board {
     pub fn cycles() -> u32 {
         unsafe { read_volatile(DWT_CYCCNT) }
     }
+}
+
+#[cfg(target_arch = "xtensa")]
+mod board {
+    use core::ptr::addr_of_mut;
+
+    use entropy_timer::{HighResTimer, PlatformTimer};
+    use esp_hal::{
+        Blocking, Config,
+        clock::CpuClock,
+        peripherals::{ADC1, RNG},
+        uart::{self, UartTx},
+    };
+
+    pub const CHIP: &str = "esp32";
+    pub const CPU_HZ: u32 = 240_000_000;
+    /// Credited min-entropy per RNG byte (`qpp-iot-boards` docs).
+    pub const CREDIT: u8 = 4;
+
+    static mut TX: Option<UartTx<'static, Blocking>> = None;
+    static mut SOURCE: Option<(RNG<'static>, ADC1<'static>)> = None;
+
+    unsafe extern "C" {
+        // Top of the main stack, and the word near its bottom that esp-hal
+        // watches for writes (esp-hal's linker script).
+        static _stack_start: u8;
+        static __stack_chk_guard: u32;
+    }
+
+    pub fn init() {
+        let p = esp_hal::init(Config::default().with_cpu_clock(CpuClock::max()));
+        let tx = UartTx::new(p.UART0, uart::Config::default().with_baudrate(115_200))
+            .unwrap()
+            .with_tx(p.GPIO1);
+        // SAFETY: one core, no interrupts, and this runs first.
+        unsafe {
+            *addr_of_mut!(TX) = Some(tx);
+            *addr_of_mut!(SOURCE) = Some((p.RNG, p.ADC1));
+        }
+    }
+
+    pub fn write(b: u8) {
+        // SAFETY: as in `init`.
+        if let Some(tx) = unsafe { &mut *addr_of_mut!(TX) } {
+            while !matches!(tx.write(&[b]), Ok(1)) {}
+        }
+    }
+
+    /// The host skips the boot messages; nothing to wait for.
+    pub fn delay_for_host() {}
+
+    pub fn enable_interrupts() {}
+
+    /// An address safely below the current frame, which holds this
+    /// local somewhere above the real stack pointer.
+    pub fn sp() -> usize {
+        let local = 0u8;
+        core::ptr::addr_of!(local) as usize - 512
+    }
+
+    pub fn ram_top() -> usize {
+        core::ptr::addr_of!(_stack_start) as usize
+    }
+
+    /// First byte above the stack guard: painting the guard would trip
+    /// esp-hal's watchpoint.
+    pub fn statics_end() -> usize {
+        core::ptr::addr_of!(__stack_chk_guard) as usize + 4
+    }
+
+    pub fn source() -> qpp_iot::boards::esp32::HwRng {
+        // SAFETY: as in `init`.
+        let (rng, adc) = unsafe { (*addr_of_mut!(SOURCE)).take() }.unwrap();
+        qpp_iot::boards::esp32::HwRng::new(rng, adc)
+    }
+
+    /// CCOUNT: CPU cycles.
+    pub fn cycles() -> u32 {
+        PlatformTimer.tick() as u32
+    }
+}
+
+#[cfg(target_arch = "xtensa")]
+esp_bootloader_esp_idf::esp_app_desc!();
+
+#[cfg(target_arch = "xtensa")]
+#[esp_hal::main]
+fn main() -> ! {
+    run()
 }
 
 #[cfg(target_arch = "avr")]
@@ -237,7 +334,7 @@ fn run() -> ! {
     puts(" cpu_hz=");
     dec(board::CPU_HZ);
     puts(" ram_top=");
-    dec(board::RAM_TOP as u32);
+    dec(board::ram_top() as u32);
     puts(" statics_end=");
     dec(lo as u32);
     puts(" painted=");
@@ -319,7 +416,7 @@ fn run() -> ! {
 
     let low = lowest_touched(lo, hi);
     puts("STACK_PEAK=");
-    dec((board::RAM_TOP - low) as u32);
+    dec((board::ram_top() - low) as u32);
     puts(" STACK_HEADROOM=");
     dec((low - lo) as u32);
     puts(if all_ok { " RESULT=PASS\nDONE\n" } else { " RESULT=FAIL\nDONE\n" });
